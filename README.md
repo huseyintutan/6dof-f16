@@ -15,50 +15,6 @@ The main objectives of this project are:
 
 ---
 
-## Project Structure
-
-```
-sim_cloud/
-├── src/                      # Python source modules
-│   ├── __init__.py
-│   ├── f16_constants.py      # Aircraft physical constants
-│   ├── f16_dynamics.py       # 6-DoF dynamics & trim solver
-│   ├── f16_forces.py         # Aerodynamic forces & moments
-│   ├── f16_aero_loader.py    # Aerodynamic database loader
-│   ├── f16_kinematics.py     # Position integration (NED)
-│   ├── f16_atmosphere.py     # ISA atmosphere model
-│   ├── gravity_model.py      # WGS-84 gravity model
-│   └── earth_model.py        # WGS-84 Earth utilities
-├── data/                     # Data files
-│   └── F16_database.json     # Aerodynamic coefficients
-├── scripts/                  # Batch scripts
-│   ├── run_sim.bat          # Run simulation
-│   └── start_flightgear.bat # Launch FlightGear
-├── tests/                    # Test scripts
-│   └── fg_send_test.py      # FlightGear UDP test
-├── main.py                   # Entry point
-└── README.md                 # This file
-```
-
-## Core Files and Their Roles
-
-| File                   | Location    | Purpose                                                                                             |
-| ---------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
-| `f16_dynamics.py`      | `src/`      | Implements aircraft dynamics equations, trim solver, and state propagation using RK4 integration  |
-| `f16_forces.py`        | `src/`      | Computes aerodynamic forces & moments based on aerodynamic database lookups                         |
-| `f16_aero_loader.py`   | `src/`      | Loads aerodynamic coefficient tables from JSON files (AoA, Mach, control surface grids)            |
-| `f16_constants.py`     | `src/`      | Defines aircraft physical constants (mass, inertia, geometry, trim conditions)                     |
-| `f16_kinematics.py`    | `src/`      | Handles position integration and coordinate transformations (NED frame)                            |
-| `f16_atmosphere.py`    | `src/`      | Implements International Standard Atmosphere (ISA) model                                          |
-| `gravity_model.py`     | `src/`      | WGS-84 gravity model with height correction                                                        |
-| `earth_model.py`       | `src/`      | WGS-84 Earth model utilities for geodetic/ECEF conversions                                         |
-| `main.py`              | root        | Entry point for simulation, handles initialization, trimming, and main simulation loop            |
-| `F16_database.json`     | `data/`     | Aerodynamic coefficient tables                                                                    |
-| `start_flightgear.bat` | `scripts/`  | Launches FlightGear in external FDM mode with UDP generic protocol                                |
-| `run_sim.bat`          | `scripts/`  | Runs the Python simulation and sends data via UDP                                                  |
-
----
-
 ## Flight Dynamics Equations
 
 The 6-DOF rigid body dynamics are expressed in body-axis coordinates.
@@ -149,34 +105,6 @@ $$\dot{w} = \dot{q} = \dot{h} = 0 \quad \Rightarrow \quad L = W, \quad T = D$$
 4. **Return** trimmed state and control inputs
 
 ---
-
-## UDP Data Interface
-
-FlightGear reads real-time data using the **Generic protocol**. The Python simulation sends comma-separated values matching `myproto.xml`.
-
-### Data Format:
-
-| Field | FlightGear Property              | Units   |
-| ----- | --------------------------------- | ------- |
-| 1     | `/position/latitude-deg`          | degrees |
-| 2     | `/position/longitude-deg`        | degrees |
-| 3     | `/position/altitude-ft`           | feet    |
-| 4     | `/orientation/roll-deg`           | degrees |
-| 5     | `/orientation/pitch-deg`          | degrees |
-| 6     | `/orientation/heading-deg`        | degrees |
-
-### Data Flow:
-
-```
-Python → UDP → FlightGear → Visualization
- |         |        |
- |         |        └──► 3D model updates
- |         └────────────► UDP socket (127.0.0.1:5500)
- └──────────────────────► Generates comma-separated lines
-```
-
----
-
 ## Quick Start Guide
 
 ### Prerequisites
