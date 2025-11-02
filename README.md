@@ -63,98 +63,81 @@ The 6-DOF rigid body dynamics are expressed in body-axis coordinates.
 
 ### State Vector:
 
-\[
-\mathbf{x} = [u, v, w, p, q, r, \phi, \theta, \psi, h]^T
-\]
+$$\mathbf{x} = [u, v, w, p, q, r, \phi, \theta, \psi, h]^T$$
 
 Where:
-* \( (u, v, w) \): body-axis velocities [m/s]
-* \( (p, q, r) \): angular rates (roll, pitch, yaw) [rad/s]
-* \( (\phi, \theta, \psi) \): Euler angles [rad]
-* \( h \): altitude [m]
+* $(u, v, w)$: body-axis velocities [m/s]
+* $(p, q, r)$: angular rates (roll, pitch, yaw) [rad/s]
+* $(\phi, \theta, \psi)$: Euler angles [rad]
+* $h$: altitude [m]
 
 ### Translational Dynamics:
 
-\[
-\begin{bmatrix}\dot{u}\\dot{v}\\dot{w}\end{bmatrix} = \begin{bmatrix}r v - q w\\p w - r u\\q u - p v\end{bmatrix} + \frac{1}{m}\begin{bmatrix}X\\Y\\Z\end{bmatrix} + g\begin{bmatrix}-\sin\theta\\\sin\phi\cos\theta\\\cos\phi\cos\theta\end{bmatrix}
-\]
+$$\begin{bmatrix}\dot{u}\\\dot{v}\\\dot{w}\end{bmatrix} = \begin{bmatrix}r v - q w\\p w - r u\\q u - p v\end{bmatrix} + \frac{1}{m}\begin{bmatrix}X\\Y\\Z\end{bmatrix} + g\begin{bmatrix}-\sin\theta\\\sin\phi\cos\theta\\\cos\phi\cos\theta\end{bmatrix}$$
+
+**Component form:**
+- $\dot{u} = rv - qw + X/m - g\sin\theta$
+- $\dot{v} = pw - ru + Y/m + g\sin\phi\cos\theta$
+- $\dot{w} = qu - pv + Z/m + g\cos\phi\cos\theta$
 
 ### Rotational Dynamics:
 
-\[
-\begin{bmatrix}\dot{p}\\\dot{q}\\\dot{r}\end{bmatrix} = I^{-1} \left( \begin{bmatrix}L\\M\\N\end{bmatrix} - \begin{bmatrix}p\\q\\r\end{bmatrix} \times \left(I \begin{bmatrix}p\\q\\r\end{bmatrix}\right) \right)
-\]
+$$\begin{bmatrix}\dot{p}\\\dot{q}\\\dot{r}\end{bmatrix} = I^{-1} \left( \begin{bmatrix}L\\M\\N\end{bmatrix} - \begin{bmatrix}p\\q\\r\end{bmatrix} \times \left(I \begin{bmatrix}p\\q\\r\end{bmatrix}\right) \right)$$
 
 ### Kinematic Equations:
 
-\[
-\begin{aligned}
+$$\begin{aligned}
 \dot{\phi} &= p + \tan\theta (q\sin\phi + r\cos\phi) \\
 \dot{\theta} &= q\cos\phi - r\sin\phi \\
-\dot{\psi} &= (q\sin\phi + r\cos\phi)/\cos\theta
-\end{aligned}
-\]
+\dot{\psi} &= \frac{q\sin\phi + r\cos\phi}{\cos\theta}
+\end{aligned}$$
 
 ### Altitude Rate:
 
-\[
-\dot{h} = -u\sin\theta - v\sin\phi\cos\theta - w\cos\phi\cos\theta
-\]
+$$\dot{h} = -u\sin\theta - v\sin\phi\cos\theta - w\cos\phi\cos\theta$$
 
 ---
 
 ## ✈️ Aerodynamic Forces and Moments
 
-Each aerodynamic coefficient (e.g., \( C_L, C_D, C_m \)) is interpolated from tabulated data as a function of:
+Each aerodynamic coefficient (e.g., $C_L$, $C_D$, $C_m$) is interpolated from tabulated data as a function of:
 * Mach number
-* Angle of attack (\( \alpha \))
-* Sideslip angle (\( \beta \))
-* Control deflections (elevator \( \delta_e \), aileron \( \delta_a \), rudder \( \delta_r \))
+* Angle of attack ($\alpha$)
+* Sideslip angle ($\beta$)
+* Control deflections (elevator $\delta_e$, aileron $\delta_a$, rudder $\delta_r$)
 
-### Aerodynamic Model Flow:
+### Forces:
 
-```
-        ┌─────────────────────────────┐
-        │  α, β, Mach, δe, δa, δr     │
-        └────────────┬────────────────┘
-                     │ Lookup Tables (JSON)
-                     ▼
-           ┌───────────────────────┐
-           │  C_L, C_D, C_m, etc. │
-           └────────────┬──────────┘
-                        │ Apply Dynamic Pressure q = ½ρV²
-                        ▼
-           ┌─────────────────────────────┐
-           │ Forces (X,Y,Z) & Moments(L,M,N) │
-           └────────────────────────────┘
-```
+$$\begin{bmatrix}X\\Y\\Z\end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix}-C_D\\C_Y\\-C_L\end{bmatrix}$$
 
-### Equations:
+**Component form:**
+- $X = -\frac{1}{2}\rho V^2 S C_D$
+- $Y = \frac{1}{2}\rho V^2 S C_Y$
+- $Z = -\frac{1}{2}\rho V^2 S C_L$
 
-\[
-\begin{bmatrix}X\\Y\\Z\end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix}-C_D\\C_Y\\-C_L\end{bmatrix}
-\]
+### Moments:
 
-\[
-\begin{bmatrix}L\\M\\N\end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix}b C_l\\c_{\bar{c}} C_m\\b C_n\end{bmatrix}
-\]
+$$\begin{bmatrix}L\\M\\N\end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix}b C_l\\c_{\bar{c}} C_m\\b C_n\end{bmatrix}$$
+
+**Component form:**
+- $L = \frac{1}{2}\rho V^2 S b C_l$ (rolling moment)
+- $M = \frac{1}{2}\rho V^2 S c_{\bar{c}} C_m$ (pitching moment)
+- $N = \frac{1}{2}\rho V^2 S b C_n$ (yawing moment)
 
 Where:
-* \( \rho \): air density [kg/m³]
-* \( V \): airspeed [m/s]
-* \( S \): wing reference area [m²]
-* \( b \): wingspan [m]
-* \( c_{\bar{c}} \): mean aerodynamic chord [m]
+* $\rho$: air density [kg/m³]
+* $V$: airspeed [m/s]
+* $S$: wing reference area [m²]
+* $b$: wingspan [m]
+* $c_{\bar{c}}$: mean aerodynamic chord [m]
 
 ---
 
 ## 🎯 Trimming for Level Flight
 
-The trim function `trim_level_flight(V0, h0)` numerically solves for the pitch angle \( \theta \), elevator deflection \( \delta_e \), and thrust \( T \) that satisfy steady-level flight:
+The trim function `trim_level_flight(V0, h0)` numerically solves for the pitch angle $\theta$, elevator deflection $\delta_e$, and thrust $T$ that satisfy steady-level flight:
 
-\[
-\dot{w} = \dot{q} = \dot{h} = 0 \quad \Rightarrow \quad L = W, \quad T = D
-\]
+$$\dot{w} = \dot{q} = \dot{h} = 0 \quad \Rightarrow \quad L = W, \quad T = D$$
 
 ### Algorithm:
 
@@ -261,42 +244,6 @@ H_TRIM = 3048.0    # trim altitude [m]
 
 ---
 
-## 🔧 System Architecture Details
-
-```
-┌───────────────────────────────────────────────────┐
-│                   USER CONTROL                    │
-│  (Runs BAT Files & Observes FlightGear Visuals)   │
-└───────────────────────────────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│      Python Engine       │
-│  - f16_dynamics          │
-│  - f16_forces            │
-│  - f16_aero_loader       │
-│  - f16_atmosphere        │
-│  - gravity_model         │
-│  - earth_model           │
-└──────────────────────────┘
-             │ UDP Stream (60 Hz)
-             ▼
-┌──────────────────────────┐
-│      FlightGear FDM      │
-│  - myproto.xml protocol  │
-│  - F-16 visual model     │
-└──────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│     3D Cockpit View      │
-│  - Attitude, altitude    │
-│  - Camera visualization  │
-└──────────────────────────┘
-```
-
----
-
 ## 📊 Coordinate Systems and Conventions
 
 ### NED Frame (North-East-Down)
@@ -313,20 +260,6 @@ H_TRIM = 3048.0    # trim altitude [m]
 * **ψ (Yaw)**: Rotation about z-axis
 * **θ (Pitch)**: Rotation about y-axis
 * **φ (Roll)**: Rotation about x-axis
-
----
-
-## 🐛 Troubleshooting
-
-| Problem                                             | Solution                                                              |
-| --------------------------------------------------- | ---------------------------------------------------------------------- |
-| `KeyError: 'I'`                                     | Ensure `f16_constants.py` includes inertia tensor `I` in dictionary   |
-| `aero_forces_moments() got multiple values`         | Check function signatures match between `f16_forces.py` and callers    |
-| `KeyError: 'cbar'` or `'c_bar'`                    | Constants file should include both `c_bar` and aliases                 |
-| Trim instability                                    | Verify initial guesses, reduce iteration step size, check residual tolerance |
-| FlightGear starts too late/early                    | Use separate batch files; start FG manually, then run simulation      |
-| UDP connection refused                              | Ensure FlightGear is running in external FDM mode before starting Python |
-| Aircraft database not found                         | Verify `F16_database.json` exists and contains required coefficient tables |
 
 ---
 
@@ -349,22 +282,3 @@ H_TRIM = 3048.0    # trim altitude [m]
 * **FlightGear Documentation**: [https://wiki.flightgear.org/](https://wiki.flightgear.org/)
 * **WGS-84**: NIMA (2000). *Department of Defense World Geodetic System 1984*
 * **ISA Atmosphere**: ISO 2533:1975
-
----
-
-## 📄 License
-
-This project is provided for educational and research purposes. Please ensure compliance with FlightGear licensing and any third-party aircraft model licenses.
-
----
-
-## 👤 Author
-
-Developed for flight dynamics simulation and FlightGear integration research.
-
----
-
-**Summary:**
-
-This project successfully couples a Python-based dynamic simulation of an F-16 to FlightGear in real time. The architecture is modular, numerically stable, and expandable — suitable for control system development, state estimation research, or reinforcement learning-based flight control applications.
-
