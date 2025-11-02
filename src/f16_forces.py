@@ -14,24 +14,31 @@
 #   * If database calls fail, simple physically-plausible fallbacks are used
 
 import math
-from f16_constants import F16_CONSTANTS as C
+from .f16_constants import F16_CONSTANTS as C
 
 # ---- Atmosphere helpers (use your atmosphere.py if available) ----
 try:
-    from atmosphere import isa_density as _rho
-    from atmosphere import speed_of_sound as _a
-    def rho_at(h_m: float) -> float: return _rho(h_m)
-    def a_at(h_m: float)   -> float: return _a(h_m)
-except Exception:
-    # Simple ISA-like approximations (good enough for low–mid altitude)
+    from .f16_atmosphere import get_atmosphere
     def rho_at(h_m: float) -> float:
-        # ρ ≈ 1.225 * exp(-h/8500)  [kg/m^3]
-        return 1.225 * math.exp(-max(0.0, h_m) / 8500.0)
+        return get_atmosphere(h_m)["rho"]
     def a_at(h_m: float) -> float:
-        # a = sqrt(gamma*R*T), T ≈ 288.15 - 0.0065*h  [K], clamp to 180 K
-        T = 288.15 - 0.0065 * max(0.0, h_m)
-        T = max(180.0, T)
-        return math.sqrt(1.4 * 287.05 * T)
+        return get_atmosphere(h_m)["a"]
+except Exception:
+    try:
+        from .atmosphere import isa_density as _rho
+        from .atmosphere import speed_of_sound as _a
+        def rho_at(h_m: float) -> float: return _rho(h_m)
+        def a_at(h_m: float) -> float: return _a(h_m)
+    except Exception:
+        # Simple ISA-like approximations (good enough for low–mid altitude)
+        def rho_at(h_m: float) -> float:
+            # ρ ≈ 1.225 * exp(-h/8500)  [kg/m^3]
+            return 1.225 * math.exp(-max(0.0, h_m) / 8500.0)
+        def a_at(h_m: float) -> float:
+            # a = sqrt(gamma*R*T), T ≈ 288.15 - 0.0065*h  [K], clamp to 180 K
+            T = 288.15 - 0.0065 * max(0.0, h_m)
+            T = max(180.0, T)
+            return math.sqrt(1.4 * 287.05 * T)
 
 # ---- Basic kinematics helpers ----
 def uvw_to_alphabeta(u: float, v: float, w: float):

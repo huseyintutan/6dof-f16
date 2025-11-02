@@ -15,22 +15,47 @@ The main objectives of this project are:
 
 ---
 
+## Project Structure
+
+```
+sim_cloud/
+├── src/                      # Python source modules
+│   ├── __init__.py
+│   ├── f16_constants.py      # Aircraft physical constants
+│   ├── f16_dynamics.py       # 6-DoF dynamics & trim solver
+│   ├── f16_forces.py         # Aerodynamic forces & moments
+│   ├── f16_aero_loader.py    # Aerodynamic database loader
+│   ├── f16_kinematics.py     # Position integration (NED)
+│   ├── f16_atmosphere.py     # ISA atmosphere model
+│   ├── gravity_model.py      # WGS-84 gravity model
+│   └── earth_model.py        # WGS-84 Earth utilities
+├── data/                     # Data files
+│   └── F16_database.json     # Aerodynamic coefficients
+├── scripts/                  # Batch scripts
+│   ├── run_sim.bat          # Run simulation
+│   └── start_flightgear.bat # Launch FlightGear
+├── tests/                    # Test scripts
+│   └── fg_send_test.py      # FlightGear UDP test
+├── main.py                   # Entry point
+└── README.md                 # This file
+```
+
 ## Core Files and Their Roles
 
-| File                   | Purpose                                                                                             |
-| ---------------------- | --------------------------------------------------------------------------------------------------- |
-| `f16_dynamics.py`      | Implements aircraft dynamics equations, trim solver, and state propagation using RK4 integration  |
-| `f16_forces.py`        | Computes aerodynamic forces & moments based on aerodynamic database lookups                         |
-| `f16_aero_loader.py`   | Loads aerodynamic coefficient tables from JSON files (AoA, Mach, control surface grids)            |
-| `f16_constants.py`     | Defines aircraft physical constants (mass, inertia, geometry, trim conditions)                     |
-| `f16_kinematics.py`    | Handles position integration and coordinate transformations (NED frame)                            |
-| `f16_atmosphere.py`    | Implements International Standard Atmosphere (ISA) model                                          |
-| `gravity_model.py`     | WGS-84 gravity model with height correction                                                        |
-| `earth_model.py`       | WGS-84 Earth model utilities for geodetic/ECEF conversions                                         |
-| `main.py`              | Entry point for simulation, handles initialization, trimming, and main simulation loop            |
-| `myproto.xml`          | Defines the UDP data structure read by FlightGear (lat, lon, alt, attitude angles)                |
-| `start_flightgear.bat` | Launches FlightGear in external FDM mode with UDP generic protocol                                |
-| `run_sim.bat`          | Runs the Python simulation and sends data via UDP                                                  |
+| File                   | Location    | Purpose                                                                                             |
+| ---------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
+| `f16_dynamics.py`      | `src/`      | Implements aircraft dynamics equations, trim solver, and state propagation using RK4 integration  |
+| `f16_forces.py`        | `src/`      | Computes aerodynamic forces & moments based on aerodynamic database lookups                         |
+| `f16_aero_loader.py`   | `src/`      | Loads aerodynamic coefficient tables from JSON files (AoA, Mach, control surface grids)            |
+| `f16_constants.py`     | `src/`      | Defines aircraft physical constants (mass, inertia, geometry, trim conditions)                     |
+| `f16_kinematics.py`    | `src/`      | Handles position integration and coordinate transformations (NED frame)                            |
+| `f16_atmosphere.py`    | `src/`      | Implements International Standard Atmosphere (ISA) model                                          |
+| `gravity_model.py`     | `src/`      | WGS-84 gravity model with height correction                                                        |
+| `earth_model.py`       | `src/`      | WGS-84 Earth model utilities for geodetic/ECEF conversions                                         |
+| `main.py`              | root        | Entry point for simulation, handles initialization, trimming, and main simulation loop            |
+| `F16_database.json`     | `data/`     | Aerodynamic coefficient tables                                                                    |
+| `start_flightgear.bat` | `scripts/`  | Launches FlightGear in external FDM mode with UDP generic protocol                                |
+| `run_sim.bat`          | `scripts/`  | Runs the Python simulation and sends data via UDP                                                  |
 
 ---
 
@@ -176,8 +201,8 @@ Python → UDP → FlightGear → Visualization
    ```
 
 4. **Update paths in batch files**:
-   - Edit `start_flightgear.bat` with your FlightGear installation path
-   - Edit `run_sim.bat` with your project directory path
+   - Edit `scripts/start_flightgear.bat` with your FlightGear installation path
+   - The `scripts/run_sim.bat` automatically detects the project root directory
 
 ### Running the Simulation
 
@@ -185,13 +210,13 @@ Python → UDP → FlightGear → Visualization
 
 1. **Start FlightGear first**:
    ```bash
-   start_flightgear.bat
+   scripts\start_flightgear.bat
    ```
    Wait until FlightGear fully loads.
 
 2. **Run the simulation**:
    ```bash
-   run_sim.bat
+   scripts\run_sim.bat
    ```
 
 #### Option 2: Direct Python Execution

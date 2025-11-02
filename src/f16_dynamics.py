@@ -14,8 +14,8 @@
 import math
 import numpy as np
 import inspect
-from f16_constants import F16_CONSTANTS as C
-from f16_forces import aero_forces_moments, uvw_to_alphabeta
+from .f16_constants import F16_CONSTANTS as C
+from .f16_forces import aero_forces_moments, uvw_to_alphabeta
 
 
 def _dcm_body_to_ned(phi, theta, psi):

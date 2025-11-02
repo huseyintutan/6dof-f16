@@ -6,7 +6,7 @@
 # - Gravity vector in NED and Body frames
 
 import numpy as np
-from earth_model import WGS84, dcm_ned_to_body
+from .earth_model import WGS84, dcm_ned_to_body
 
 # Somigliana constants for WGS-84 normal gravity
 _g_e = 9.7803253359       # [m/s^2] gravity at equator

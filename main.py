@@ -6,11 +6,17 @@
 #  - (Optional) Send pose to FlightGear via UDP
 
 import math
-from f16_constants import F16_CONSTANTS as C
-from f16_aero_loader import F16AeroDB
-from f16_dynamics import f_dot, trim_level_flight
-from f16_kinematics import integrate_position
-from f16_forces import uvw_to_alphabeta
+import sys
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from src.f16_constants import F16_CONSTANTS as C
+from src.f16_aero_loader import F16AeroDB
+from src.f16_dynamics import f_dot, trim_level_flight
+from src.f16_kinematics import integrate_position
+from src.f16_forces import uvw_to_alphabeta
 
 # ---- Optional FlightGear UDP sender (enable by set SEND_TO_FG=True)
 import socket
@@ -51,8 +57,8 @@ SBRAKE   = 0.0
 fg = FGSender() if SEND_TO_FG else None
 
 # --------------- Load Aero DB ------------------------
-DB_PATH = "F16_database.json"
-db = F16AeroDB(DB_PATH)
+DB_PATH = Path(__file__).parent / "data" / "F16_database.json"
+db = F16AeroDB(str(DB_PATH))
 
 # --------------- Trim at (V_trim, h_trim) ------------
 V0 = float(C["V_trim"])

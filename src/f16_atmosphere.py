@@ -17,7 +17,7 @@ from math import sqrt, exp
 
 # Try to import shared constants if available (same folder).
 try:
-    from f16_constants import F16_CONSTANTS as _C
+    from .f16_constants import F16_CONSTANTS as _C
     _HAS_EXTERNAL_CONSTANTS = True
 except Exception:
     _C = {}

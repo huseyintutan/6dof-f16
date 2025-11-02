@@ -2,7 +2,7 @@
 title Run Python Sim
 
 :: === YOL ===
-set "SIMDIR=C:\Users\HUSEYIN\Desktop\sim"
+set "SIMDIR=%~dp0.."
 
 pushd "%SIMDIR%"
 where python >nul 2>nul
