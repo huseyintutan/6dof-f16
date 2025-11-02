@@ -1,66 +1,52 @@
 # f16_constants.py
-# -------------------------------------------------------------
-# F-16 Fighting Falcon - Fixed Physical and Geometric Parameters
-# This file defines constant values used in the simulation.
-# No functions are defined here – only numerical constants.
-# -------------------------------------------------------------
+# Minimal constant pack used by dynamics & trim
+
+import math
+
+# Geometry / mass (senin verdiğin değerlere göre)
+I_xx = 12875.0     # kg m^2
+I_yy = 75674.0
+I_zz = 85552.0
+I_xz = 1331.0
+I_yx = 0.0
+I_yz = 0.0
+
+MASS = 9300.0      # kg
+S     = 27.88      # m^2
+B     = 9.144      # m (span)
+C_BAR = 3.45       # m (mean aero chord)
+
+# Atmosphere / gravity
+G0 = 9.80665       # m/s^2
+
+# Trim targets
+V_TRIM = 150.0     # m/s (isteğe göre 153 de olabilir)
+H_TRIM = 3048.0    # m
+
+# Engine (yaklaşık; ihtiyaca göre güncelleyebiliriz)
+TMAX_ALT = 120_000.0  # N (AB yakın maksimum; kabaca)
 
 F16_CONSTANTS = {
-    # =========================================================
-    # GEOMETRY PARAMETERS
-    # =========================================================
-    "S": 27.87,        # [m^2] Wing reference area
-    "b": 9.144,        # [m]   Wing span
-    "cbar": 3.45,      # [m]   Mean aerodynamic chord
+    # Inertia as 3x3 (body frame; Ixy=Iyz=0, Ixz ≠ 0)
+    "I": [
+        [ I_xx,      -I_yx,     -I_xz ],
+        [ -I_yx,     I_yy,      -I_yz ],
+        [ -I_xz,     -I_yz,      I_zz ],
+    ],
 
-    # =========================================================
-    # MASS AND INERTIA PROPERTIES
-    # (Components of the inertia tensor in body axes)
-    # =========================================================
-    "mass": 9300.0,    # [kg] Aircraft total mass (empty + pilot + fuel)
-    "Ixx": 12875.0,    # [kg·m²] Roll axis moment of inertia (x-axis)
-    "Iyy": 75674.0,    # [kg·m²] Pitch axis moment of inertia (y-axis)
-    "Izz": 85552.0,    # [kg·m²] Yaw axis moment of inertia (z-axis)
-    "Ixz": 1331.0,     # [kg·m²] Cross inertia term (x–z coupling)
-    "Ixy": 0.0,        # [kg·m²] Usually zero (assumed symmetry)
-    "Iyz": 0.0,        # [kg·m²] Usually zero (assumed symmetry)
+    # Also expose components individually (fallback için)
+    "I_xx": I_xx, "I_yy": I_yy, "I_zz": I_zz,
+    "I_xz": I_xz, "I_yx": I_yx, "I_yz": I_yz,
 
-    # =========================================================
-    # ATMOSPHERIC AND GRAVITATIONAL CONSTANTS
-    # =========================================================
-    "g": 9.80665,      # [m/s²] Gravitational acceleration (ISA standard)
-    "R": 287.05287,    # [J/(kg·K)] Gas constant for air
-    "gamma": 1.4,      # [-] Specific heat ratio for air
-    "rho0": 1.225,     # [kg/m³] Sea level density
-    "T0": 288.15,      # [K] Sea level temperature (15°C)
-    "p0": 101325.0,    # [Pa] Sea level pressure
+    "mass": MASS,
+    "S": S,
+    "b": B,
+    "c_bar": C_BAR,
 
-    # =========================================================
-    # REFERENCE TRIM CONDITION
-    # =========================================================
-    "alpha_trim": 2.0, # [deg] Trim angle of attack (approx. level flight)
-    "V_trim": 150.0,   # [m/s] Trim velocity (~300 knots)
-    "h_trim": 3048.0,  # [m]   Trim altitude (≈10,000 ft)
+    "g": G0,
 
-    # =========================================================
-    # CONTROL SURFACE LIMITS (for controller or actuator modeling)
-    # =========================================================
-    "de_max": 25.0,    # [deg] Elevator max deflection
-    "da_max": 21.5,    # [deg] Aileron max deflection
-    "dr_max": 30.0,    # [deg] Rudder max deflection
-    "lef_max": 25.0,   # [deg] Leading-edge flap max deflection
+    "V_trim": V_TRIM,
+    "h_trim": H_TRIM,
 
-    # =========================================================
-    # ENGINE AND THRUST DATA (approximate values)
-    # =========================================================
-    "Tmax_SL": 129000.0,   # [N] Max thrust at sea level (~29,000 lbf)
-    "Tmax_alt": 92000.0,   # [N] Max thrust at ~10,000 ft (approx.)
+    "Tmax_alt": TMAX_ALT,
 }
-
-# -------------------------------------------------------------
-# NOTES:
-# - Inertia data (Ixx, Iyy, Izz, Ixz) are taken from USAF/NASA F-16 documentation.
-# - "Ixz" represents roll–yaw coupling due to asymmetry.
-# - These constants are valid for clean configuration, medium fuel load.
-# - Engine thrust decreases with altitude (Tmax_alt is approximate).
-# -------------------------------------------------------------
