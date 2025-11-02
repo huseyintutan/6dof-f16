@@ -4,7 +4,7 @@ A real-time flight dynamics simulation system that couples a Python-based **F-16
 
 ---
 
-## 🎯 Project Overview
+## Project Overview
 
 The main objectives of this project are:
 
@@ -15,7 +15,7 @@ The main objectives of this project are:
 
 ---
 
-## 📋 Core Files and Their Roles
+## Core Files and Their Roles
 
 | File                   | Purpose                                                                                             |
 | ---------------------- | --------------------------------------------------------------------------------------------------- |
@@ -34,30 +34,7 @@ The main objectives of this project are:
 
 ---
 
-## 🏗️ System Architecture
-
-```
-             ┌───────────────────────┐
-             │   Python Simulation   │
-             │  (main.py + dynamics)  │
-             └──────────┬────────────┘
-                        │ UDP (socket, port 5500)
-                        ▼
-             ┌────────────────────────────┐
-             │ FlightGear (External FDM)  │
-             │  Reads via myproto.xml     │
-             └──────────┬─────────────────┘
-                        │ Visual Output (3D)
-                        ▼
-             ┌────────────────────────────┐
-             │  F-16 3D Cockpit & Model   │
-             │  (org.flightgear.fgaddon)  │
-             └────────────────────────────┘
-```
-
----
-
-## 🔬 Flight Dynamics Equations
+## Flight Dynamics Equations
 
 The 6-DOF rigid body dynamics are expressed in body-axis coordinates.
 
@@ -73,7 +50,7 @@ Where:
 
 ### Translational Dynamics:
 
-$$\begin{bmatrix}\dot{u}\\\dot{v}\\\dot{w}\end{bmatrix} = \begin{bmatrix}r v - q w\\p w - r u\\q u - p v\end{bmatrix} + \frac{1}{m}\begin{bmatrix}X\\Y\\Z\end{bmatrix} + g\begin{bmatrix}-\sin\theta\\\sin\phi\cos\theta\\\cos\phi\cos\theta\end{bmatrix}$$
+$$\begin{bmatrix} \dot{u} \\ \dot{v} \\ \dot{w} \end{bmatrix} = \begin{bmatrix} r v - q w \\ p w - r u \\ q u - p v \end{bmatrix} + \frac{1}{m}\begin{bmatrix} X \\ Y \\ Z \end{bmatrix} + g\begin{bmatrix} -\sin\theta \\ \sin\phi\cos\theta \\ \cos\phi\cos\theta \end{bmatrix}$$
 
 **Component form:**
 - $\dot{u} = rv - qw + X/m - g\sin\theta$
@@ -82,7 +59,7 @@ $$\begin{bmatrix}\dot{u}\\\dot{v}\\\dot{w}\end{bmatrix} = \begin{bmatrix}r v - q
 
 ### Rotational Dynamics:
 
-$$\begin{bmatrix}\dot{p}\\\dot{q}\\\dot{r}\end{bmatrix} = I^{-1} \left( \begin{bmatrix}L\\M\\N\end{bmatrix} - \begin{bmatrix}p\\q\\r\end{bmatrix} \times \left(I \begin{bmatrix}p\\q\\r\end{bmatrix}\right) \right)$$
+$$\begin{bmatrix} \dot{p} \\ \dot{q} \\ \dot{r} \end{bmatrix} = I^{-1} \left( \begin{bmatrix} L \\ M \\ N \end{bmatrix} - \begin{bmatrix} p \\ q \\ r \end{bmatrix} \times \left(I \begin{bmatrix} p \\ q \\ r \end{bmatrix}\right) \right)$$
 
 ### Kinematic Equations:
 
@@ -98,7 +75,7 @@ $$\dot{h} = -u\sin\theta - v\sin\phi\cos\theta - w\cos\phi\cos\theta$$
 
 ---
 
-## ✈️ Aerodynamic Forces and Moments
+## Aerodynamic Forces and Moments
 
 Each aerodynamic coefficient (e.g., $C_L$, $C_D$, $C_m$) is interpolated from tabulated data as a function of:
 * Mach number
@@ -108,7 +85,7 @@ Each aerodynamic coefficient (e.g., $C_L$, $C_D$, $C_m$) is interpolated from ta
 
 ### Forces:
 
-$$\begin{bmatrix}X\\Y\\Z\end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix}-C_D\\C_Y\\-C_L\end{bmatrix}$$
+$$\begin{bmatrix} X \\ Y \\ Z \end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix} -C_D \\ C_Y \\ -C_L \end{bmatrix}$$
 
 **Component form:**
 - $X = -\frac{1}{2}\rho V^2 S C_D$
@@ -117,7 +94,7 @@ $$\begin{bmatrix}X\\Y\\Z\end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix}-C_
 
 ### Moments:
 
-$$\begin{bmatrix}L\\M\\N\end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix}b C_l\\c_{\bar{c}} C_m\\b C_n\end{bmatrix}$$
+$$\begin{bmatrix} L \\ M \\ N \end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatrix} b C_l \\ c_{\bar{c}} C_m \\ b C_n \end{bmatrix}$$
 
 **Component form:**
 - $L = \frac{1}{2}\rho V^2 S b C_l$ (rolling moment)
@@ -133,7 +110,7 @@ Where:
 
 ---
 
-## 🎯 Trimming for Level Flight
+## Trimming for Level Flight
 
 The trim function `trim_level_flight(V0, h0)` numerically solves for the pitch angle $\theta$, elevator deflection $\delta_e$, and thrust $T$ that satisfy steady-level flight:
 
@@ -148,7 +125,7 @@ $$\dot{w} = \dot{q} = \dot{h} = 0 \quad \Rightarrow \quad L = W, \quad T = D$$
 
 ---
 
-## 📡 UDP Data Interface
+## UDP Data Interface
 
 FlightGear reads real-time data using the **Generic protocol**. The Python simulation sends comma-separated values matching `myproto.xml`.
 
@@ -175,7 +152,7 @@ Python → UDP → FlightGear → Visualization
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 ### Prerequisites
 
@@ -244,7 +221,7 @@ H_TRIM = 3048.0    # trim altitude [m]
 
 ---
 
-## 📊 Coordinate Systems and Conventions
+## Coordinate Systems and Conventions
 
 ### NED Frame (North-East-Down)
 * **+N**: North (forward in local horizontal plane)
@@ -263,7 +240,7 @@ H_TRIM = 3048.0    # trim altitude [m]
 
 ---
 
-## 📈 Future Improvements
+## Future Improvements
 
 * **Wind-axis equations** and advanced atmosphere models (winds, turbulence)
 * **Sensor models** (IMU, GPS, air data) with EKF fusion
@@ -276,7 +253,7 @@ H_TRIM = 3048.0    # trim altitude [m]
 
 ---
 
-## 📚 Technical References
+## Technical References
 
 * **Aircraft Dynamics**: Stevens, B. L., & Lewis, F. L. (2003). *Aircraft Control and Simulation*
 * **FlightGear Documentation**: [https://wiki.flightgear.org/](https://wiki.flightgear.org/)
