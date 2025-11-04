@@ -134,12 +134,19 @@ $$\dot{w} = \dot{q} = \dot{h} = 0 \quad \Rightarrow \quad L = W, \quad T = D$$
    pip install numpy
    ```
 
-3. **Place `myproto.xml` in FlightGear protocols directory**:
+3. **Install web dashboard dependencies (optional, recommended)**:
+   ```bash
+   scripts\install_web_dashboard.bat
+   # OR
+   pip install flask flask-socketio
+   ```
+
+4. **Place `myproto.xml` in FlightGear protocols directory**:
    ```
    C:\Users\<YourUser>\FlightGear\fgdata\Protocols\myproto.xml
    ```
 
-4. **Update paths in batch files**:
+5. **Update paths in batch files**:
    - Edit `scripts/start_flightgear.bat` with your FlightGear installation path
    - The `scripts/run_sim.bat` automatically detects the project root directory
 
@@ -176,9 +183,14 @@ LON0_DEG = 28.979530    # reference longitude
 SEND_TO_FG = True       # enable FlightGear UDP output
 ENABLE_MANEUVER = True  # internal maneuver inputs (turn/roll/climb)
 MANEUVER_TYPE = "turn"   # "climb"|"turn"|"roll"|"none"
-ENABLE_DASHBOARD = True # live plots (matplotlib)
-DASH_RATE = 10.0        # Hz
-PLOT_WINDOW_SEC = 20.0  # seconds
+ENABLE_WEB_DASHBOARD = True  # web-based dashboard (recommended, low CPU)
+WEB_DASHBOARD_PORT = 5000    # web dashboard port
+ENABLE_DASHBOARD = False     # matplotlib dashboard (legacy, high CPU)
+DASH_RATE = 10.0             # Hz (matplotlib only)
+PLOT_WINDOW_SEC = 20.0       # seconds (matplotlib only)
+ENABLE_SENSORS = True        # sensor modeling
+SENSOR_NOISE = True          # sensor noise
+SENSOR_BIAS = True           # sensor bias
 ```
 
 Edit `f16_constants.py` to modify aircraft trim conditions:
@@ -209,22 +221,148 @@ H_TRIM = 3048.0    # trim altitude [m]
 
 ---
 
-## Live Dashboard
+## Live Dashboards
+
+The simulation supports two types of live dashboards:
+
+### Web Dashboard (Recommended)
+
+A lightweight, web-based dashboard with much lower CPU usage (~5-15% vs 40-60% for matplotlib). Access it via your web browser at `http://127.0.0.1:5000` after starting the simulation.
+
+**Features:**
+- Real-time state visualization (airspeed, altitude, attitude, angular rates)
+- Sensor data display (IMU, GPS, Air Data)
+- Interactive charts using Chart.js
+- WebSocket-based real-time updates
+- Cross-platform compatible (works on any device with a browser)
+
+**Setup:**
+1. Install dependencies:
+   ```bash
+   scripts\install_web_dashboard.bat
+   # OR
+   pip install flask flask-socketio
+   ```
+
+2. Enable in `main.py`:
+   ```python
+   ENABLE_WEB_DASHBOARD = True
+   WEB_DASHBOARD_PORT = 5000
+   ```
+
+3. Run simulation:
+   ```bash
+   scripts\run_sim.bat
+   ```
+
+4. Open dashboard:
+   ```bash
+   scripts\open_web_dashboard.bat
+   # OR manually open: http://127.0.0.1:5000
+   ```
+
+**Check connection:**
+```bash
+scripts\check_web_dashboard.bat
+```
+
+### Matplotlib Dashboard (Legacy)
 
 Enable `ENABLE_DASHBOARD = True` to open a live multi-panel plot (alpha/beta, airspeed, p–q–r, Euler angles, altitude, controls). Update rate is set by `DASH_RATE` and the visible time window by `PLOT_WINDOW_SEC`.
 
+**Note:** The matplotlib dashboard has higher CPU usage and is disabled by default. Use the web dashboard for better performance.
+
 ---
+
+## Sensor Modeling
+
+The simulation includes a comprehensive sensor suite with realistic noise and bias modeling:
+
+### Available Sensors
+
+1. **IMU (Inertial Measurement Unit)**
+   - **Accelerometer**: 3-axis specific force (fx, fy, fz) in body frame [m/s²]
+   - **Gyroscope**: 3-axis angular rates (p, q, r) [rad/s]
+   - Configurable noise and bias
+
+2. **GPS (Global Positioning System)**
+   - Position: latitude, longitude, altitude [deg, m]
+   - Velocity: NED velocity components [m/s]
+   - Update rate: 10 Hz (configurable)
+   - Delay: 0.1 s (configurable)
+
+3. **Air Data Sensors**
+   - **Pitot-static**: Airspeed [m/s] and static pressure altitude [m]
+   - **Angle of Attack (α)**: [degrees]
+   - **Sideslip (β)**: [degrees]
+
+4. **Magnetometer**
+   - Heading measurement [degrees]
+
+5. **Barometric Altimeter**
+   - Altitude from static pressure [m]
+
+### Usage
+
+Sensors are automatically enabled in `main.py` when `ENABLE_SENSORS = True`. Configure sensor behavior:
+
+```python
+ENABLE_SENSORS = True          # Enable sensor modeling
+SENSOR_NOISE = True            # Enable sensor noise
+SENSOR_BIAS = True             # Enable sensor bias
+SENSOR_LOG_RATE = 1.0          # Hz - Rate to print sensor outputs
+```
+
+Sensor measurements are available in the simulation loop:
+
+```python
+sensor_measurements = sensors.update(t, state, N, E, D, lat0, lon0, dt, forces)
+# Access: sensor_measurements["imu_accel"], sensor_measurements["gps"], etc.
+```
+
+See `examples/sensor_example.py` for standalone sensor usage.
+
+---
+
+## Project Structure
+
+```
+sim_cloud/
+├── main.py                 # Main simulation loop
+├── src/
+│   ├── f16_dynamics.py     # 6-DoF dynamics equations
+│   ├── f16_forces.py       # Aerodynamic forces and moments
+│   ├── f16_aero_loader.py  # Aerodynamic data loading
+│   ├── f16_sensors.py      # Sensor modeling (IMU, GPS, Air Data, etc.)
+│   ├── f16_kinematics.py   # Kinematic equations
+│   ├── f16_atmosphere.py   # Atmospheric models
+│   ├── gravity_model.py    # Gravity calculations
+│   ├── earth_model.py      # Geodetic coordinate conversions
+│   ├── f16_constants.py    # Aircraft constants and trim settings
+│   └── web_dashboard.py    # Web dashboard server (Flask-SocketIO)
+├── scripts/
+│   ├── run_sim.bat         # Run Python simulation
+│   ├── start_flightgear.bat # Start FlightGear
+│   ├── install_web_dashboard.bat # Install web dashboard dependencies
+│   ├── open_web_dashboard.bat    # Open web dashboard in browser
+│   └── check_web_dashboard.bat   # Check web dashboard connection
+├── templates/
+│   └── dashboard.html      # Web dashboard HTML template
+├── data/
+│   └── F16_database.json   # Aerodynamic lookup tables
+└── requirements.txt        # Python dependencies
+```
 
 ## Future Improvements
 
 * **Wind-axis equations** and advanced atmosphere models (winds, turbulence)
-* **Sensor models** (IMU, GPS, air data) with EKF fusion
+* **EKF sensor fusion** for state estimation from noisy sensor measurements
 * **Bidirectional UDP link** (Python ←→ FlightGear for controls)
-* **Autopilot implementation** (altitude hold, heading hold, etc.)
+* **Autopilot implementation** (altitude hold, heading hold, etc.) using sensor feedback
 * **Reinforcement Learning** integration for flight control
 * **Data logging** (CSV/JSON export for post-flight analysis)
-* **Real-time plotting** (live graphs of state variables)
 * **Multi-aircraft support** for formation flight simulations
+* **Enhanced web dashboard** with 3D visualization and more sensor plots
 
 ---
 

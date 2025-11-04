@@ -1,13 +1,13 @@
 @echo off
 title Run Python Sim
 
-:: === YOL ===
+:: === PATHS ===
 set "SIMDIR=%~dp0.."
 
 pushd "%SIMDIR%"
 where python >nul 2>nul
 if errorlevel 1 (
-  echo Python bulunamadi. PATH'e ekleyin veya Python yukleyin.
+  echo Python not found. Add to PATH or install Python.
   pause
   exit /b 1
 )
@@ -17,8 +17,8 @@ set ERR=%ERRORLEVEL%
 popd
 
 if %ERR% NEQ 0 (
-  echo Sim hata kodu: %ERR%
+  echo Simulation error code: %ERR%
 ) else (
-  echo Sim bitti.
+  echo Simulation finished.
 )
 pause
