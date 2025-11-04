@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EKF Sensor Fusion Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .status.connected {
+            background: #4caf50;
+        }
+        .status.disconnected {
+            background: #f44336;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        .metric-card h4 {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+        .metric-card .value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .metric-card .unit {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-left: 5px;
+        }
+        .metric-card.error {
+            background: rgba(255, 0, 0, 0.2);
+        }
+        .metric-card.good {
+            background: rgba(0, 255, 0, 0.2);
+        }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .chart-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .chart-container h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 300px;
+        }
+        .params-panel {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .params-panel h3 {
+            margin-bottom: 10px;
+        }
+        .params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .param-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .param-item label {
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
+        .param-item .value {
+            font-size: 1.2em;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔬 EKF Sensor Fusion Dashboard</h1>
+        <div class="status disconnected" id="status">Disconnected</div>
+    </div>
+
+    <!-- Performance Metrics -->
+    <div class="metrics-grid">
+        <div class="metric-card" id="pos-error-card">
+            <h4>Position Error</h4>
+            <div class="value" id="pos-error">0<span class="unit">m</span></div>
+        </div>
+        <div class="metric-card" id="vel-error-card">
+            <h4>Velocity Error</h4>
+            <div class="value" id="vel-error">0<span class="unit">m/s</span></div>
+        </div>
+        <div class="metric-card" id="att-error-card">
+            <h4>Attitude Error</h4>
+            <div class="value" id="att-error">0<span class="unit">°</span></div>
+        </div>
+        <div class="metric-card">
+            <h4>RMSE Position</h4>
+            <div class="value" id="rmse-pos">0<span class="unit">m</span></div>
+        </div>
+        <div class="metric-card">
+            <h4>RMSE Velocity</h4>
+            <div class="value" id="rmse-vel">0<span class="unit">m/s</span></div>
+        </div>
+        <div class="metric-card">
+            <h4>RMSE Attitude</h4>
+            <div class="value" id="rmse-att">0<span class="unit">°</span></div>
+        </div>
+        <div class="metric-card">
+            <h4>Max Position Error</h4>
+            <div class="value" id="max-pos-error">0<span class="unit">m</span></div>
+        </div>
+        <div class="metric-card">
+            <h4>Total Updates</h4>
+            <div class="value" id="total-updates">0</div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+        <div class="chart-container">
+            <h3>Position Estimation (Altitude)</h3>
+            <div class="chart-wrapper">
+                <canvas id="altitudeChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h3>Velocity Estimation</h3>
+            <div class="chart-wrapper">
+                <canvas id="velocityChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h3>Attitude Estimation (Roll)</h3>
+            <div class="chart-wrapper">
+                <canvas id="rollChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h3>Attitude Estimation (Pitch)</h3>
+            <div class="chart-wrapper">
+                <canvas id="pitchChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h3>Position Error</h3>
+            <div class="chart-wrapper">
+                <canvas id="posErrorChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h3>Velocity Error</h3>
+            <div class="chart-wrapper">
+                <canvas id="velErrorChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h3>Attitude Error</h3>
+            <div class="chart-wrapper">
+                <canvas id="attErrorChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-container">
+            <h3>Sensor Bias Estimation</h3>
+            <div class="chart-wrapper">
+                <canvas id="biasChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- EKF Parameters -->
+    <div class="params-panel">
+        <h3>EKF Parameters</h3>
+        <div class="params-grid" id="params-grid">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        const maxDataPoints = 3000; // 300 seconds (5 minutes) at 10 Hz
+
+        // Chart configurations
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        title: { display: true, text: 'Time (s)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Value' }
+                    }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top' }
+                }
+            }
+        };
+
+        // Initialize charts
+        const charts = {
+            altitude: new Chart(document.getElementById('altitudeChart'), {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        { label: 'True Altitude', data: [], borderColor: 'rgb(0, 0, 0)', borderDash: [5, 5], tension: 0.1, pointRadius: 0 },
+                        { label: 'Estimated Altitude', data: [], borderColor: 'rgb(54, 162, 235)', tension: 0.1, pointRadius: 0 }
+                    ]
+                }
+            }),
+            velocity: new Chart(document.getElementById('velocityChart'), {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        { label: 'True Velocity', data: [], borderColor: 'rgb(0, 0, 0)', borderDash: [5, 5], tension: 0.1, pointRadius: 0 },
+                        { label: 'Estimated Velocity', data: [], borderColor: 'rgb(75, 192, 192)', tension: 0.1, pointRadius: 0 }
+                    ]
+                }
+            }),
+            roll: new Chart(document.getElementById('rollChart'), {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        { label: 'True Roll', data: [], borderColor: 'rgb(0, 0, 0)', borderDash: [5, 5], tension: 0.1, pointRadius: 0 },
+                        { label: 'Estimated Roll', data: [], borderColor: 'rgb(255, 99, 132)', tension: 0.1, pointRadius: 0 }
+                    ]
+                }
+            }),
+            pitch: new Chart(document.getElementById('pitchChart'), {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        { label: 'True Pitch', data: [], borderColor: 'rgb(0, 0, 0)', borderDash: [5, 5], tension: 0.1, pointRadius: 0 },
+                        { label: 'Estimated Pitch', data: [], borderColor: 'rgb(153, 102, 255)', tension: 0.1, pointRadius: 0 }
+                    ]
+                }
+            }),
+            posError: new Chart(document.getElementById('posErrorChart'), {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        { label: 'Position Error', data: [], borderColor: 'rgb(255, 0, 0)', tension: 0.1, pointRadius: 0 }
+                    ]
+                }
+            }),
+            velError: new Chart(document.getElementById('velErrorChart'), {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        { label: 'Velocity Error', data: [], borderColor: 'rgb(255, 165, 0)', tension: 0.1, pointRadius: 0 }
+                    ]
+                }
+            }),
+            attError: new Chart(document.getElementById('attErrorChart'), {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        { label: 'Attitude Error', data: [], borderColor: 'rgb(255, 192, 203)', tension: 0.1, pointRadius: 0 }
+                    ]
+                }
+            }),
+            bias: new Chart(document.getElementById('biasChart'), {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        { label: 'Accel Bias X', data: [], borderColor: 'rgb(255, 99, 132)', tension: 0.1, pointRadius: 0 },
+                        { label: 'Accel Bias Y', data: [], borderColor: 'rgb(75, 192, 192)', tension: 0.1, pointRadius: 0 },
+                        { label: 'Accel Bias Z', data: [], borderColor: 'rgb(54, 162, 235)', tension: 0.1, pointRadius: 0 },
+                        { label: 'Gyro Bias P', data: [], borderColor: 'rgb(153, 102, 255)', tension: 0.1, pointRadius: 0 },
+                        { label: 'Gyro Bias Q', data: [], borderColor: 'rgb(255, 159, 64)', tension: 0.1, pointRadius: 0 },
+                        { label: 'Gyro Bias R', data: [], borderColor: 'rgb(255, 205, 86)', tension: 0.1, pointRadius: 0 }
+                    ]
+                }
+            })
+        };
+
+        // Helper function to add data point
+        function addDataPoint(chart, datasetIndex, x, y) {
+            const dataset = chart.data.datasets[datasetIndex];
+            dataset.data.push({x, y});
+            if (dataset.data.length > maxDataPoints) {
+                dataset.data.shift();
+            }
+            chart.update('none');
+        }
+
+        // Update error card color
+        function updateErrorCard(cardId, value, threshold) {
+            const card = document.getElementById(cardId);
+            if (value > threshold) {
+                card.className = 'metric-card error';
+            } else {
+                card.className = 'metric-card good';
+            }
+        }
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            document.getElementById('status').textContent = 'Connected';
+            document.getElementById('status').className = 'status connected';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('status').textContent = 'Disconnected';
+            document.getElementById('status').className = 'status disconnected';
+        });
+
+        socket.on('ekf_data', (data) => {
+            const t = data.t || 0;
+            const trueState = data.true_state || {};
+            const estState = data.estimated_state || {};
+            const errors = data.errors || {};
+            const ekfParams = data.ekf_params || {};
+            const stats = data.stats || {};
+
+            // Update metrics
+            if (errors.position_error !== undefined) {
+                document.getElementById('pos-error').innerHTML = errors.position_error.toFixed(2) + '<span class="unit">m</span>';
+                updateErrorCard('pos-error-card', errors.position_error, 5.0);
+            }
+            if (errors.velocity_error !== undefined) {
+                document.getElementById('vel-error').innerHTML = errors.velocity_error.toFixed(3) + '<span class="unit">m/s</span>';
+                updateErrorCard('vel-error-card', errors.velocity_error, 1.0);
+            }
+            if (errors.attitude_error !== undefined) {
+                document.getElementById('att-error').innerHTML = errors.attitude_error.toFixed(2) + '<span class="unit">°</span>';
+                updateErrorCard('att-error-card', errors.attitude_error, 5.0);
+            }
+
+            // Update statistics
+            if (stats.rmse_position !== undefined) {
+                document.getElementById('rmse-pos').innerHTML = stats.rmse_position.toFixed(2) + '<span class="unit">m</span>';
+            }
+            if (stats.rmse_velocity !== undefined) {
+                document.getElementById('rmse-vel').innerHTML = stats.rmse_velocity.toFixed(3) + '<span class="unit">m/s</span>';
+            }
+            if (stats.rmse_attitude !== undefined) {
+                document.getElementById('rmse-att').innerHTML = stats.rmse_attitude.toFixed(2) + '<span class="unit">°</span>';
+            }
+            if (stats.max_error_position !== undefined) {
+                document.getElementById('max-pos-error').innerHTML = stats.max_error_position.toFixed(2) + '<span class="unit">m</span>';
+            }
+            if (stats.total_updates !== undefined) {
+                document.getElementById('total-updates').textContent = stats.total_updates;
+            }
+
+            // Update charts
+            if (trueState.h !== undefined && estState.h !== undefined) {
+                addDataPoint(charts.altitude, 0, t, trueState.h);
+                addDataPoint(charts.altitude, 1, t, estState.h);
+            }
+            if (trueState.V !== undefined && estState.V !== undefined) {
+                addDataPoint(charts.velocity, 0, t, trueState.V);
+                addDataPoint(charts.velocity, 1, t, estState.V);
+            }
+            if (trueState.roll !== undefined && estState.roll !== undefined) {
+                addDataPoint(charts.roll, 0, t, trueState.roll);
+                addDataPoint(charts.roll, 1, t, estState.roll);
+            }
+            if (trueState.pitch !== undefined && estState.pitch !== undefined) {
+                addDataPoint(charts.pitch, 0, t, trueState.pitch);
+                addDataPoint(charts.pitch, 1, t, estState.pitch);
+            }
+
+            // Error charts
+            if (errors.position_error !== undefined) {
+                addDataPoint(charts.posError, 0, t, errors.position_error);
+            }
+            if (errors.velocity_error !== undefined) {
+                addDataPoint(charts.velError, 0, t, errors.velocity_error);
+            }
+            if (errors.attitude_error !== undefined) {
+                addDataPoint(charts.attError, 0, t, errors.attitude_error);
+            }
+
+            // Bias charts
+            if (estState.ba && estState.ba.length >= 3) {
+                addDataPoint(charts.bias, 0, t, estState.ba[0]);
+                addDataPoint(charts.bias, 1, t, estState.ba[1]);
+                addDataPoint(charts.bias, 2, t, estState.ba[2]);
+            }
+            if (estState.bg && estState.bg.length >= 3) {
+                addDataPoint(charts.bias, 3, t, estState.bg[0]);
+                addDataPoint(charts.bias, 4, t, estState.bg[1]);
+                addDataPoint(charts.bias, 5, t, estState.bg[2]);
+            }
+
+            // Update EKF parameters
+            if (ekfParams) {
+                updateParamsPanel(ekfParams);
+            }
+        });
+
+        function updateParamsPanel(params) {
+            const grid = document.getElementById('params-grid');
+            grid.innerHTML = '';
+            
+            for (const [key, value] of Object.entries(params)) {
+                const item = document.createElement('div');
+                item.className = 'param-item';
+                item.innerHTML = `
+                    <label>${key}</label>
+                    <div class="value">${typeof value === 'number' ? value.toFixed(4) : value}</div>
+                `;
+                grid.appendChild(item);
+            }
+        }
+    </script>
+</body>
+</html>
+

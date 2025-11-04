@@ -23,6 +23,22 @@ from src.f16_kinematics import integrate_position, ned_dot_from_body, euler_to_q
 from src.f16_forces import uvw_to_alphabeta
 from src.f16_sensors import SensorSuite
 
+# Sensor fusion (EKF) - optional
+try:
+    from src.sensor_fusion_ekf import EKFSensorFusion
+    HAS_EKF = True
+except ImportError as e:
+    HAS_EKF = False
+    print(f"[WARN] EKF sensor fusion not available: {e}")
+
+# EKF Dashboard - optional
+try:
+    from src.ekf_dashboard import EKFDashboard, HAS_FLASK as HAS_EKF_FLASK
+    HAS_EKF_DASHBOARD = HAS_EKF_FLASK
+except ImportError as e:
+    HAS_EKF_DASHBOARD = False
+    print(f"[WARN] EKF dashboard not available: {e}")
+
 # Web dashboard (optional)
 try:
     from src.web_dashboard import WebDashboard, HAS_FLASK
@@ -82,7 +98,7 @@ except Exception:
 
 # --------------- Simulation settings -----------------
 DT       = 0.01         # time step [s] (100 Hz internal rate)
-T_FINAL  = 60.0         # total time [s] (1 minute simulation)
+T_FINAL  = 300.0        # total time [s] (5 minutes simulation - longer for EKF testing)
 N_STEPS  = int(T_FINAL / DT)  # Total: 6,000 steps
 LAT0_DEG = 41.015137    # reference geodetic (e.g. Istanbul)
 LON0_DEG = 28.979530
@@ -123,6 +139,15 @@ SENSOR_NOISE = True            # Enable sensor noise
 SENSOR_BIAS = True             # Enable sensor bias
 SENSOR_LOG_RATE = 1.0          # Hz - Rate to print sensor outputs to console
 SENSOR_LOG_INTERVAL = max(1, int(1.0 / (SENSOR_LOG_RATE * DT)))
+
+# --------------- Sensor Fusion (EKF) settings ------------------
+ENABLE_SENSOR_FUSION = True    # Enable EKF sensor fusion
+SENSOR_FUSION_RATE = 10.0      # Hz - EKF update rate
+SENSOR_FUSION_INTERVAL = max(1, int(1.0 / (SENSOR_FUSION_RATE * DT)))
+
+# --------------- EKF Dashboard settings ------------------
+ENABLE_EKF_DASHBOARD = True and HAS_EKF_DASHBOARD  # Enable EKF dashboard (separate port)
+EKF_DASHBOARD_PORT = 5001  # EKF dashboard port (different from main dashboard)
 
 # --------------- System Resource Pre-allocation ------------------
 def preallocate_resources():
@@ -791,6 +816,43 @@ if ENABLE_SENSORS:
     )
     print(f"[SENSORS] Sensor suite initialized (noise={'ON' if SENSOR_NOISE else 'OFF'}, bias={'ON' if SENSOR_BIAS else 'OFF'})")
 
+# --------------- Initialize Sensor Fusion (EKF) ------------------
+ekf = None
+if ENABLE_SENSOR_FUSION and HAS_EKF and ENABLE_SENSORS:
+    ekf = EKFSensorFusion(
+        lat0_deg=LAT0_DEG,
+        lon0_deg=LON0_DEG,
+        dt=DT
+    )
+    # Will initialize after first state update
+    print(f"[EKF] Sensor fusion EKF initialized (will initialize with first state)")
+elif ENABLE_SENSOR_FUSION and not HAS_EKF:
+    print(f"[EKF] Sensor fusion requested but EKF module not available")
+elif ENABLE_SENSOR_FUSION and not ENABLE_SENSORS:
+    print(f"[EKF] Sensor fusion requires sensors to be enabled")
+
+# --------------- Initialize EKF Dashboard ------------------
+ekf_dash = None
+if ENABLE_EKF_DASHBOARD and ENABLE_SENSOR_FUSION:
+    try:
+        print(f"[EKF-DASH] Initializing EKF dashboard on port {EKF_DASHBOARD_PORT}...")
+        ekf_dash = EKFDashboard(port=EKF_DASHBOARD_PORT)
+        ekf_dash.start_server(run_in_thread=True)
+        print(f"[EKF-DASH] EKF dashboard initialization complete")
+    except ImportError as e:
+        print(f"[EKF-DASH] ❌ Failed: Flask-SocketIO not installed")
+        print(f"[EKF-DASH] Install with: pip install flask flask-socketio")
+        ekf_dash = None
+    except Exception as e:
+        print(f"[EKF-DASH] ❌ Failed to start EKF dashboard: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"[EKF-DASH] Continuing without EKF dashboard...")
+        ekf_dash = None
+else:
+    if HAS_EKF_DASHBOARD:
+        print("[EKF-DASH] EKF dashboard disabled (set ENABLE_EKF_DASHBOARD = True to enable)")
+
 # Main simulation loop
 for step in range(N_STEPS):
     # Real-time synchronization (only check periodically to reduce overhead)
@@ -862,6 +924,113 @@ for step in range(N_STEPS):
                   f"IMU: fx={imu['fx']:.2f} fy={imu['fy']:.2f} fz={imu['fz']:.2f} m/s² | "
                   f"GPS: alt={gps['alt_m']:.1f}m | "
                   f"Air: V={air['airspeed_mps']:.1f}m/s alpha={air['alpha_deg']:.2f}°")
+    
+    # 3.5) Update sensor fusion (EKF) - runs at higher rate
+    estimated_state = None
+    if ekf is not None and sensor_measurements is not None:
+        # Initialize EKF on first update
+        if not ekf.initialized:
+            ekf.initialize(state, N, E, D)
+            print(f"[EKF] EKF initialized with initial state")
+        
+        # Update EKF at fusion rate
+        if step % SENSOR_FUSION_INTERVAL == 0:
+            try:
+                # Predict step (using IMU)
+                ekf.predict()
+                
+                # Update with all measurements
+                if "imu_accel" in sensor_measurements and "imu_gyro" in sensor_measurements:
+                    ekf.update_imu(sensor_measurements["imu_accel"], sensor_measurements["imu_gyro"])
+                
+                if "gps" in sensor_measurements and sensor_measurements["gps"] is not None:
+                    ekf.update_gps(sensor_measurements["gps"])
+                
+                if "air_data" in sensor_measurements:
+                    ekf.update_air_data(sensor_measurements["air_data"])
+                
+                if "magnetometer" in sensor_measurements:
+                    ekf.update_magnetometer(sensor_measurements["magnetometer"])
+                
+                if "baro_alt" in sensor_measurements:
+                    ekf.update_baro(sensor_measurements["baro_alt"])
+                
+                # Get estimated state
+                estimated_state = ekf.get_estimated_state()
+                
+                # Log EKF state periodically
+                if step % SENSOR_LOG_INTERVAL == 0:
+                    est = estimated_state
+                    true_h = state["h"]
+                    est_h = est["h"]
+                    error_h = abs(true_h - est_h)
+                    true_V = math.sqrt(state["u"]**2 + state["v"]**2 + state["w"]**2)
+                    est_V = est["V"]
+                    error_V = abs(true_V - est_V)
+                    print(f"[EKF] t={t:.2f}s | Est h={est_h:.1f}m (err={error_h:.2f}m) | Est V={est_V:.1f}m/s (err={error_V:.2f}m/s)")
+                
+                # Send to EKF dashboard (only if EKF is working)
+                if ekf_dash is not None and estimated_state is not None:
+                    # Calculate errors
+                    true_h = state["h"]
+                    est_h = estimated_state["h"]
+                    true_V = math.sqrt(state["u"]**2 + state["v"]**2 + state["w"]**2)
+                    est_V = estimated_state["V"]
+                    true_roll = math.degrees(state["phi"])
+                    est_roll = math.degrees(estimated_state["phi"])
+                    true_pitch = math.degrees(state["theta"])
+                    est_pitch = math.degrees(estimated_state["theta"])
+                    
+                    # Position error (3D)
+                    pos_error = abs(true_h - est_h)  # Simplified to altitude error
+                    
+                    # Velocity error
+                    vel_error = abs(true_V - est_V)
+                    
+                    # Attitude error (combined roll/pitch)
+                    roll_error = abs(true_roll - est_roll)
+                    pitch_error = abs(true_pitch - est_pitch)
+                    att_error = math.sqrt(roll_error**2 + pitch_error**2)
+                    
+                    # EKF parameters (covariance diagonal)
+                    P_diag = np.diag(ekf.P)
+                    
+                    ekf_data = {
+                        "t": t,
+                        "true_state": {
+                            "h": true_h,
+                            "V": true_V,
+                            "roll": true_roll,
+                            "pitch": true_pitch,
+                            "heading": math.degrees(state["psi"])
+                        },
+                        "estimated_state": {
+                            "h": est_h,
+                            "V": est_V,
+                            "roll": est_roll,
+                            "pitch": est_pitch,
+                            "heading": math.degrees(estimated_state["psi"]),
+                            "ba": estimated_state["ba"].tolist() if isinstance(estimated_state["ba"], np.ndarray) else estimated_state["ba"],
+                            "bg": estimated_state["bg"].tolist() if isinstance(estimated_state["bg"], np.ndarray) else estimated_state["bg"]
+                        },
+                        "errors": {
+                            "position_error": pos_error,
+                            "velocity_error": vel_error,
+                            "attitude_error": att_error
+                        },
+                        "ekf_params": {
+                            "P_position": float(P_diag[2]),  # D (altitude) covariance
+                            "P_velocity": float(np.mean(P_diag[3:6])),  # Average velocity covariance
+                            "P_attitude": float(np.mean(P_diag[6:9])),  # Average attitude covariance
+                            "P_accel_bias": float(np.mean(P_diag[9:12])),  # Average accel bias covariance
+                            "P_gyro_bias": float(np.mean(P_diag[12:15]))  # Average gyro bias covariance
+                        },
+                        "stats": ekf_dash.get_statistics() if ekf_dash else {}
+                    }
+                    ekf_dash.send_data(ekf_data)
+            except Exception as e:
+                if step % SENSOR_LOG_INTERVAL == 0:
+                    print(f"[EKF] Error in update: {e}")
     
     # Update separate sensor dashboard (only if not combined)
     if sensor_dash is not None and (step % SENSOR_DASH_UPDATE_INTERVAL == 0) and sensor_measurements is not None:
