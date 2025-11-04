@@ -16,6 +16,7 @@ import numpy as np
 import inspect
 from .f16_constants import F16_CONSTANTS as C
 from .f16_forces import aero_forces_moments, uvw_to_alphabeta
+from .gravity_model import gravity_ned
 
 
 def _dcm_body_to_ned(phi, theta, psi):
@@ -110,7 +111,8 @@ def f_dot(state,
     h   = float(state["h"])
 
     m = float(C["mass"])
-    g = float(C["g"])
+    # Gravity magnitude varies with latitude/altitude
+    lat_rad = math.radians(float(lat_deg))
 
     # --- robust inertia fetch: allow either full matrix or individual components
     if "I" in C:
@@ -136,7 +138,7 @@ def f_dot(state,
     # 2) Gravity in BODY (NED gravity is +mg in +z_ned)
     R_bn = _dcm_body_to_ned(phi, theta, psi)  # body->NED
     R_nb = R_bn.T                              # NED->body
-    g_ned  = np.array([0.0, 0.0, m*g], dtype=float)
+    g_ned  = m * gravity_ned(lat_rad, h)  # [N] in NED (down-positive)
     g_body = R_nb @ g_ned
     Fx += g_body[0]; Fy += g_body[1]; Fz += g_body[2]
 
@@ -174,22 +176,22 @@ def trim_level_flight(V_target, h_target, aero_db,
                       lef=False, speedbrake=0.0, lat_deg=41.0):
     """
     Solve a near-level, near-zero-rate trim at (V_target, h_target).
-    Unknowns: theta (rad), de (deg), thrust_N.
-    Residuals ~ 0: w_dot, q_dot, h_dot.
+    Unknowns: alpha (rad), theta (rad), de (deg), thrust_N.
+    Residuals ~ 0: u_dot, w_dot, q_dot, h_dot.
 
     Returns:
         dict: {theta, de, thrust_N, alpha_deg, state0, controls0}
     """
     # Initial guesses
+    alpha = math.radians(2.0)
     theta = math.radians(2.0)
     de    = 0.0
     thrust = 0.5 * float(C["Tmax_alt"])
 
-    def residuals(theta_, de_, thrust_):
-        # Simple assumption for initial split between u,w from V
-        alpha = theta_
-        u = V_target * math.cos(alpha)
-        w = V_target * math.sin(alpha)
+    def residuals(alpha_, theta_, de_, thrust_):
+        # Split V into body components from alpha
+        u = V_target * math.cos(alpha_)
+        w = V_target * math.sin(alpha_)
         v = 0.0
         p = q = r = 0.0
 
@@ -199,30 +201,38 @@ def trim_level_flight(V_target, h_target, aero_db,
 
         d = f_dot(st, ctr, aero_db, thrust_, lef=lef,
                   speedbrake=speedbrake, lat_deg=lat_deg)
-        return np.array([d["w_dot"], d["q_dot"], d["h_dot"]], dtype=float), st, ctr
+        return np.array([d["u_dot"], d["w_dot"], d["q_dot"], d["h_dot"]], dtype=float), st, ctr
 
     # Newton iterations
-    for _ in range(30):
-        R, _, _ = residuals(theta, de, thrust)
+    for _ in range(40):
+        R, _, _ = residuals(alpha, theta, de, thrust)
 
+        eps_al = 1e-4
         eps_th = 1e-4
         eps_de = 1e-3
         eps_T  = 5.0
 
-        R_th, _, _ = residuals(theta + eps_th, de, thrust)
-        R_de, _, _ = residuals(theta, de + eps_de, thrust)
-        R_T,  _, _ = residuals(theta, de, thrust + eps_T)
+        R_al, _, _ = residuals(alpha + eps_al, theta, de, thrust)
+        R_th, _, _ = residuals(alpha, theta + eps_th, de, thrust)
+        R_de, _, _ = residuals(alpha, theta, de + eps_de, thrust)
+        R_T,  _, _ = residuals(alpha, theta, de, thrust + eps_T)
 
-        J = np.column_stack([(R_th - R)/eps_th, (R_de - R)/eps_de, (R_T - R)/eps_T])
+        J = np.column_stack([
+            (R_al - R)/eps_al,
+            (R_th - R)/eps_th,
+            (R_de - R)/eps_de,
+            (R_T  - R)/eps_T
+        ])
 
         try:
             dx = np.linalg.lstsq(J, -R, rcond=None)[0]
         except np.linalg.LinAlgError:
             break
 
-        theta += dx[0]
-        de    += dx[1]
-        thrust+= dx[2]
+        alpha += dx[0]
+        theta += dx[1]
+        de    += dx[2]
+        thrust+= dx[3]
 
         # Bounds
         de = float(np.clip(de, -20.0, 20.0))
@@ -232,7 +242,6 @@ def trim_level_flight(V_target, h_target, aero_db,
             break
 
     # Build consistent initial state
-    alpha = theta
     u0 = V_target * math.cos(alpha)
     w0 = V_target * math.sin(alpha)
     v0 = 0.0

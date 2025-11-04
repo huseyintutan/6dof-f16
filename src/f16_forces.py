@@ -16,6 +16,31 @@
 import math
 from .f16_constants import F16_CONSTANTS as C
 
+# --- Minimal lateral-directional stability derivative defaults (rough values) ---
+# Coefficient units:
+#   - CY_beta per deg, Cl_beta per deg, Cn_beta per deg
+#   - Cl_p, Cn_r are per non-dimensional rate (p̂, r̂)
+#   - Cl_da, Cn_dr per deg of control
+# These are simple placeholders to give the model basic lateral realism when DB lacks data.
+CY_BETA_PER_DEG = -0.02
+Cl_BETA_PER_DEG = -0.0008
+Cn_BETA_PER_DEG =  0.0012
+
+Cl_P = -0.5     # roll damping per p̂
+Cn_R = -0.2     # yaw damping per r̂
+
+Cl_DA_PER_DEG =  0.0015
+Cn_DR_PER_DEG = -0.0010
+
+# --- Minimal dynamic pitch and cross-coupling derivatives ---
+# Pitch damping and lift-rate (approximate):
+CM_Q = -8.0e-2   # per q̂ (Cm_q)
+CL_Q =  3.0e-2   # per q̂ (CL_q)
+
+# Cross-coupling (weak):
+Cl_R =  0.05     # per r̂ (roll due to yaw rate)
+Cn_P =  0.02     # per p̂ (yaw due to roll rate)
+
 # ---- Atmosphere helpers (use your atmosphere.py if available) ----
 try:
     from .f16_atmosphere import get_atmosphere
@@ -114,8 +139,33 @@ def aero_forces_moments(u: float, v: float, w: float,
     rho  = rho_at(max(0.0, h))
     qbar = 0.5 * rho * V * V
 
-    # Aero coefficients (from DB + fallbacks)
+    # Aero coefficients (from DB + fallbacks for CL, CD, Cm)
     CL, CD, CY, Cl, Cm, Cn = aero_lookup(aero_db, alpha_deg, beta_deg, controls, h, V)
+
+    # Lateral-directional minimal model if DB didn't provide CY/Cl/Cn
+    # Non-dimensional rates
+    V_safe = max(1e-3, V)
+    p_hat = (p * b) / (2.0 * V_safe)
+    r_hat = (r * b) / (2.0 * V_safe)
+    da = float(controls.get("da", 0.0))
+    dr = float(controls.get("dr", 0.0))
+
+    # If zeros (or absent) from lookup, synthesize simple linear models
+    if abs(CY) < 1e-12:
+        CY = CY_BETA_PER_DEG * beta_deg + 0.0 * dr  # extend with CY_dr if desired
+    if abs(Cl) < 1e-12:
+        Cl = (Cl_BETA_PER_DEG * beta_deg) + (Cl_P * p_hat) + (Cl_DA_PER_DEG * da)
+    if abs(Cn) < 1e-12:
+        Cn = (Cn_BETA_PER_DEG * beta_deg) + (Cn_R * r_hat) + (Cn_DR_PER_DEG * dr)
+
+    # Add weak cross-coupling for lateral-directional rates
+    Cl += Cl_R * r_hat
+    Cn += Cn_P * p_hat
+
+    # Add dynamic pitch derivatives: Cm_q and CL_q
+    q_hat = (q * c_) / (2.0 * V_safe)
+    Cm += CM_Q * q_hat
+    CL += CL_Q * q_hat
 
     # Body-axis projection (z is positive down):
     # X = -qS * CD * cosα + qS * CL * sinα

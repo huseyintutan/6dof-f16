@@ -42,13 +42,15 @@ $$\begin{bmatrix} \dot{u} \\ \dot{v} \\ \dot{w} \end{bmatrix} = \begin{bmatrix} 
 
 $$\begin{bmatrix} \dot{p} \\ \dot{q} \\ \dot{r} \end{bmatrix} = I^{-1} \left( \begin{bmatrix} L \\ M \\ N \end{bmatrix} - \begin{bmatrix} p \\ q \\ r \end{bmatrix} \times \left(I \begin{bmatrix} p \\ q \\ r \end{bmatrix}\right) \right)$$
 
-### Kinematic Equations:
+### Kinematic Equations (Euler and Quaternion):
 
 $$\begin{aligned}
 \dot{\phi} &= p + \tan\theta (q\sin\phi + r\cos\phi) \\
 \dot{\theta} &= q\cos\phi - r\sin\phi \\
 \dot{\psi} &= \frac{q\sin\phi + r\cos\phi}{\cos\theta}
 \end{aligned}$$
+
+Implementation note: the simulator propagates attitude with a unit quaternion using RK4 and derives Euler angles for logging/FlightGear output. This avoids gimbal singularities.
 
 ### Altitude Rate:
 
@@ -83,6 +85,15 @@ $$\begin{bmatrix} L \\ M \\ N \end{bmatrix} = \frac{1}{2}\rho V^2 S \begin{bmatr
 - $N = \frac{1}{2}\rho V^2 S b C_n$ (yawing moment)
 
 Where:
+### Lateral-Directional Minimal Model and Dynamic Derivatives
+
+When the aero database lacks lateral-directional entries, a minimal model is used to introduce stability/controls effects:
+
+- $C_Y = C_{Y_\beta}\,\beta$
+- $C_l = C_{l_\beta}\,\beta + C_{l_p}\,\hat p + C_{l_{\delta_a}}\,\delta_a + C_{l_r}\,\hat r$
+- $C_n = C_{n_\beta}\,\beta + C_{n_r}\,\hat r + C_{n_{\delta_r}}\,\delta_r + C_{n_p}\,\hat p$
+
+Dynamic derivatives included: $C_{m_q}\,\hat q$, $C_{L_q}\,\hat q$ with $\hat p = pb/(2V)$, $\hat q = qc/(2V)$, $\hat r = rb/(2V)$.
 * $\rho$: air density [kg/m³]
 * $V$: airspeed [m/s]
 * $S$: wing reference area [m²]
@@ -93,14 +104,14 @@ Where:
 
 ## Trimming for Level Flight
 
-The trim function `trim_level_flight(V0, h0)` numerically solves for the pitch angle $\theta$, elevator deflection $\delta_e$, and thrust $T$ that satisfy steady-level flight:
+The trim function `trim_level_flight(V0, h0)` solves for angle of attack $\alpha$, pitch $\theta$, elevator $\delta_e$, and thrust $T$ such that steady-level flight holds:
 
 $$\dot{w} = \dot{q} = \dot{h} = 0 \quad \Rightarrow \quad L = W, \quad T = D$$
 
 ### Algorithm:
 
-1. **Initial guess** for elevator deflection, pitch angle, and thrust
-2. **Propagate dynamics** → compute residuals (w_dot, q_dot, h_dot)
+1. **Initial guess** for $\alpha$, $\theta$, $\delta_e$, $T$
+2. **Propagate dynamics** → compute residuals ($\dot u$, $\dot w$, $\dot q$, $\dot h$)
 3. **Newton iteration** with finite-difference Jacobian
 4. **Return** trimmed state and control inputs
 
@@ -163,6 +174,11 @@ T_FINAL  = 10.0         # total time [s]
 LAT0_DEG = 41.015137    # reference latitude (Istanbul)
 LON0_DEG = 28.979530    # reference longitude
 SEND_TO_FG = True       # enable FlightGear UDP output
+ENABLE_MANEUVER = True  # internal maneuver inputs (turn/roll/climb)
+MANEUVER_TYPE = "turn"   # "climb"|"turn"|"roll"|"none"
+ENABLE_DASHBOARD = True # live plots (matplotlib)
+DASH_RATE = 10.0        # Hz
+PLOT_WINDOW_SEC = 20.0  # seconds
 ```
 
 Edit `f16_constants.py` to modify aircraft trim conditions:
@@ -190,6 +206,12 @@ H_TRIM = 3048.0    # trim altitude [m]
 * **ψ (Yaw)**: Rotation about z-axis
 * **θ (Pitch)**: Rotation about y-axis
 * **φ (Roll)**: Rotation about x-axis
+
+---
+
+## Live Dashboard
+
+Enable `ENABLE_DASHBOARD = True` to open a live multi-panel plot (alpha/beta, airspeed, p–q–r, Euler angles, altitude, controls). Update rate is set by `DASH_RATE` and the visible time window by `PLOT_WINDOW_SEC`.
 
 ---
 
